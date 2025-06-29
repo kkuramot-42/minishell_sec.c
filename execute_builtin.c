@@ -61,6 +61,42 @@ char **overwrite_env(const char *key, const char *value, char **envp)
 	return new_envp;
 }
 
+// void execute_echo(char **args, char **envp)
+// {
+// 	int i = 1;
+// 	int newline = 1;
+
+// 	if (args[1] && ft_strcmp(args[1], "-n") == 0)
+// 	{
+// 		newline = 0;
+// 		i++;
+// 	}
+
+// 	t_token *tokens;
+// 	char *joined;
+
+// 	while (args[i])
+// 	{
+// 		tokens = shell_split_with_quotes(args[i]);
+// 		for (int j = 0; tokens[j].value; j++)
+// 		{
+// 			if (tokens[j].quote != '\'')
+// 				joined = expand_variables(tokens[j].value, envp);
+// 			else
+// 				joined = ft_strdup(tokens[j].value);
+
+// 			write(STDOUT_FILENO, joined, ft_strlen(joined));
+// 			free(joined);
+// 		}
+// 		free_tokens(tokens);
+// 		if (args[i + 1])
+// 			write(STDOUT_FILENO, " ", 1);
+// 		i++;
+// 	}
+// 	if (newline)
+// 		write(STDOUT_FILENO, "\n", 1);
+// }
+
 void execute_echo(char **args, char **envp)
 {
 	int i = 1;
@@ -72,23 +108,9 @@ void execute_echo(char **args, char **envp)
 		i++;
 	}
 
-	t_token *tokens;
-	char *joined;
-
 	while (args[i])
 	{
-		tokens = shell_split_with_quotes(args[i]);
-		for (int j = 0; tokens[j].value; j++)
-		{
-			if (tokens[j].quote != '\'')
-				joined = expand_variables(tokens[j].value, envp);
-			else
-				joined = ft_strdup(tokens[j].value);
-
-			write(STDOUT_FILENO, joined, ft_strlen(joined));
-			free(joined);
-		}
-		free_tokens(tokens);
+		write(STDOUT_FILENO, args[i], ft_strlen(args[i]));
 		if (args[i + 1])
 			write(STDOUT_FILENO, " ", 1);
 		i++;
@@ -96,6 +118,9 @@ void execute_echo(char **args, char **envp)
 	if (newline)
 		write(STDOUT_FILENO, "\n", 1);
 }
+
+
+
 
 void execute_cd(char **args, char ***envp)
 {
@@ -221,6 +246,12 @@ void execute_exit(char **args)
 		// 	}
 		// }
 		long long status = ft_atoll(args[1]) % 256;
+		if (args[2])
+		{
+			perror("exit: too many arguments");
+			g_last_status = 1;
+			return;
+		}
 		exit(status);		//複数exit時にexitせずにexit_statusのみ最後のものに更新
 		// g_last_status = status;
 	}

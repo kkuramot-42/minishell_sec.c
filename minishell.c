@@ -163,6 +163,12 @@ void	execute_cmd(char *cmdline, char **envp)
 		write(2, "command not found\n", 19);
 		exit(127);
 	}
+	if (is_builtin(args[0]))
+	{
+		g_last_status = execute_builtin(args, &envp);
+		ft_free_split(args);
+		exit(g_last_status);
+	}
 	path = find_path(args[0], envp);
 	if (!path)
 	{
@@ -379,7 +385,6 @@ t_token	*shell_split_with_quotes(const char *s)
 			break ;
 		tokens[count].value = token;
 		tokens[count].quote = quote;
-		// printf("%d-%c\n",count,tokens[count].quote);
 		count++;
 
 		size_t	len;
@@ -389,41 +394,61 @@ t_token	*shell_split_with_quotes(const char *s)
 			s += len + 2;
 		else
 			s += len;
-
-		// if (quote)
-		// {
-		// 	// s++;
-		// 	// while (*s && *s != quote)
-		// 	// 	s++;
-		// 	// if (*s == quote)
-		// 	// 	s++;
-		// 	s += ft_strlen(token) + 2;
-		// }
-		// else
-		// 	s += ft_strlen(token);
 	}
 	tokens[count].value = NULL;
 	tokens[count].quote = 0;
 	return (tokens);
 }
 
+char	*strip_quotes(const char *str, char *quote_type)
+{
+	size_t	len = ft_strlen(str);
+
+	if (len >= 2 && ((str[0] == '\'' && str[len - 1] == '\'') || (str[0] == '"' && str[len - 1] == '"')))
+	{
+		*quote_type = str[0];
+		return ft_strndup(str + 1, len - 2);
+	}
+	else
+	{
+		*quote_type = 0;
+		return ft_strdup(str);
+	}
+}
+
 t_cmd	*parse_commands(char *line, char **envp)
 {
-	t_cmd	*head;
-	t_cmd	*curr;
-	t_token	*tokens;
+	t_cmd	*head = NULL;
+	t_cmd	*curr = NULL;
+	t_cmd	*iter = NULL;
+	char	**tokens = ft_split(line, ' ');
 	char	*tmp;
-	int		i;
+	char	*cleaned;
 	char	*expanded;
-	t_cmd	*iter;
+	char	quote_type;
 
-	head = NULL;
-	curr = NULL;
-	tokens = shell_split_with_quotes(line);
-	if (!tokens)
-		return (NULL);
-	for (i = 0; tokens[i].value; i++)
+	for (int i = 0; tokens && tokens[i]; i++)
 	{
+		if (ft_strcmp(tokens[i], "|") == 0)
+		{
+			curr = NULL;
+			continue;
+		}
+		else if (ft_strcmp(tokens[i], "<") == 0 || ft_strcmp(tokens[i], ">") == 0
+			|| ft_strcmp(tokens[i], "<<") == 0 || ft_strcmp(tokens[i], ">>") == 0)
+		{
+			if (tokens[i + 1])
+			{
+				t_token op = {ft_strdup(tokens[i]), 0};
+				t_token file = {ft_strdup(tokens[i + 1]), 0};
+				parse_redirection_token(&op, &file, curr, envp);
+				free(op.value);
+				free(file.value);
+				i++;
+			}
+			continue;
+		}
+
 		if (!curr)
 		{
 			curr = new_cmd_node();
@@ -437,75 +462,51 @@ t_cmd	*parse_commands(char *line, char **envp)
 				iter->next = curr;
 			}
 		}
-		if (ft_strncmp(tokens[i].value, "|", 2) == 0)
+
+		cleaned = strip_quotes(tokens[i], &quote_type);
+		// printf("%c\n", quote_type);
+
+		if (quote_type == '\'')
 		{
-			curr = NULL;
-			continue ;
-		}
-		else if (ft_strcmp(tokens[i].value, "<") == 0
-			|| ft_strcmp(tokens[i].value, ">") == 0
-			|| ft_strcmp(tokens[i].value, "<<") == 0
-			|| ft_strcmp(tokens[i].value, ">>") == 0)
-		{
-			parse_redirection_token(&tokens[i], &tokens[i + 1], curr, envp);
-			i++;
-			continue ;
+			// printf("%c\n", quote_type);
+			expanded = ft_strdup(cleaned);
+			// printf("if :%s\n", expanded);
 		}
 		else
 		{
-			// printf("%d\n", i);
-			size_t j;     //iにするとiが0からになっているので、シングルクオンテーションが入っているのがi = 1のときなので、認識されない。jにするとechoが入っているのが0のときなのでシングルクオンテーションで囲われている部分がコマンドとして認識されてしまう。
-			j = i + 1;
-			// printf("%c\n", tokens[i].quote);
-				if (tokens[i].quote != '\'')
-				// if (tokens[1].quote != '\'')
-				{
-					// printf("HOGE");
-					expanded = expand_variables(tokens[i].value, envp);
-					// printf("%s\n", tokens[i].value);
-					// printf("%c\n", tokens[j].quote);
-				}
-				else
-				{
-					// printf("DEBUG");
-					expanded = ft_strdup(tokens[i].value);
-				}
-			if (!curr->cmd)
-				curr->cmd = ft_strdup(expanded);
-			else
-			{
-				tmp = malloc(ft_strlen(curr->cmd) + ft_strlen(expanded) + 2);
-				sprintf(tmp, "%s %s", curr->cmd, expanded);
-				free(curr->cmd);
-				curr->cmd = tmp;
-			}
-			free(expanded);
+			// printf("DBUG\n");
+			expanded = expand_variables(cleaned, envp);
+			// printf("else :%s\n", expanded);
 		}
+		free(cleaned);
+
+		if (!curr->cmd)
+			curr->cmd = ft_strdup(expanded);
+		else
+		{
+			tmp = malloc(ft_strlen(curr->cmd) + ft_strlen(expanded) + 2);
+			sprintf(tmp, "%s %s", curr->cmd, expanded);
+			free(curr->cmd);
+			curr->cmd = tmp;
+		}
+		free(expanded);
 	}
-	free_tokens(tokens);
-	return (head);
+	ft_free_split(tokens);
+	return head;
 }
+
 
 void	execute_pipeline(char *line, char ***envp)
 {
 	t_cmd	*cmds;
 	int		pipefd[2];
-	int		prev_fd;
-	char	**args;
+	int		prev_fd = -1;
+	int		pid, status;
 
 	cmds = parse_commands(line, *envp);
-	prev_fd = -1;
-	int pid, status;
+
 	while (cmds)
 	{
-		args = ft_split(cmds->cmd, ' ');
-		if (args && args[0] && is_builtin(args[0]) && !cmds->next && prev_fd ==
-			-1)
-		{
-			g_last_status = execute_builtin(args, envp);
-			ft_free_split(args);
-			break ;
-		}
 		pipe(pipefd);
 		pid = fork();
 		if (pid == 0)
@@ -514,10 +515,12 @@ void	execute_pipeline(char *line, char ***envp)
 				dup2(cmds->infile, STDIN_FILENO);
 			else if (prev_fd != -1)
 				dup2(prev_fd, STDIN_FILENO);
+
 			if (cmds->outfile != STDOUT_FILENO)
 				dup2(cmds->outfile, STDOUT_FILENO);
 			else if (cmds->next)
 				dup2(pipefd[1], STDOUT_FILENO);
+
 			close(pipefd[0]);
 			execute_cmd(cmds->cmd, *envp);
 			exit(1);
@@ -529,13 +532,13 @@ void	execute_pipeline(char *line, char ***envp)
 				g_last_status = WEXITSTATUS(status);
 			else
 				g_last_status = 1;
+
 			close(pipefd[1]);
 			if (prev_fd != -1)
 				close(prev_fd);
 			prev_fd = pipefd[0];
 			cmds = cmds->next;
 		}
-		ft_free_split(args);
 	}
 }
 
