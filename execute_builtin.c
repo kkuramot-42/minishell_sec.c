@@ -210,22 +210,21 @@ void execute_env(char **envp)
 
 void execute_exit(char **args)
 {
-	printf("exit\n");
 	if (args[1])
 	{
-		for (int i = 0; args[1][i]; i++)
-		{
-			if (!('0' <= args[1][i] && args[1][i] <= '9'))
-			{
-				fprintf(stderr, "minishell: exit: %s: numeric argument required\n", args[1]);
-				exit(255);
-			}
-		}
-		int status = atoi(args[1]) % 256;
+		// for (int i = 0; args[1][i]; i++)
+		// {
+		// 	if (!('0' <= args[1][i] && args[1][i] <= '9'))
+		// 	{
+		// 		fprintf(stderr, "minishell: exit: %s: numeric argument required\n", args[1]);
+		// 		exit(255);
+		// 	}
+		// }
+		long long status = ft_atoll(args[1]) % 256;
 		exit(status);		//複数exit時にexitせずにexit_statusのみ最後のものに更新
 		// g_last_status = status;
 	}
-	// exit(0);
+	exit(0);
 }
 
 int execute_builtin(char **args, char ***envp)

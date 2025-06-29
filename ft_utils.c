@@ -214,3 +214,50 @@ char	**ft_split(char const *s, char c)
 	return (result);
 }
 
+long long	ft_atoll(char *c)
+{
+	int		i;
+	int		sign;
+	long long tmp;
+	long long	result;
+	char *msg;
+
+	i = 0;
+	sign = 1;
+	result = 0;
+	while (c[i] == ' ' || (c[i] >= 9 && c[i] <= 13))
+		i++;
+	if (c[i] == '-' || c[i] == '+')
+	{
+		if (c[i++] == '-')
+			sign = -1;
+	}
+	while (c[i])
+	{
+		if (!(c[i] >= '0' && c[i] <= '9'))
+		{
+			msg = malloc(ft_strlen(c) + 36);
+			ft_strcpy(msg, "exit: ");
+			ft_strcat(msg, c);
+			ft_strcat(msg, ": numeric argument required");
+			perror(msg);
+			free(msg);
+			return (2);
+		}
+		tmp = result;
+		result = result * 10 + (c[i] - '0');
+		if (result / 10 != tmp)
+		{
+			msg = malloc(ft_strlen(c) + 36);
+			ft_strcpy(msg, "exit: ");
+			ft_strcat(msg, c);
+			ft_strcat(msg, ": numeric argument required");
+			perror(msg);
+			free(msg);
+			return (2);
+		}
+		i++;
+	}
+	printf("exit\n");
+	return (result * sign);
+}
