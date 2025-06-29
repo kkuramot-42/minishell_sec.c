@@ -63,7 +63,7 @@ int	setup_heredoc(char *limiter)
 {
 	int		fd;
 	char	*line;
-	char	*check;
+	// char	*check;
 	size_t	len;
 
 	fd = open(".heredoc_tmp", O_CREAT | O_WRONLY | O_TRUNC, 0644);
@@ -205,9 +205,9 @@ char	*expand_variables(const char *str, char **envp)
 {
 	char	*result;
 	size_t	i = 0, j;
-				char status[12];
-				char pid[12];
-			char name[256] = {0};
+	char status[12];
+				// char pid[12];
+	char name[256] = {0};
 	int		k;
 	char	*val;
 
@@ -220,7 +220,14 @@ char	*expand_variables(const char *str, char **envp)
 		if (str[i] == '$')
 		{
 			i++;
-			if (str[i] == '?')
+			if (!str[i] || str[i] == ' ' || str[i] == '"' || str[i] == '\'' || str[i] == '\0')
+			{
+				result = realloc(result, j + 2);
+				result[j++] = '$';
+				result[j] = '\0';
+				continue;
+			}
+			else if (str[i] == '?')
 			{
 				sprintf(status, "%d", g_last_status);
 				result = realloc(result, j + strlen(status) + 1);
@@ -295,109 +302,48 @@ static t_cmd	*new_cmd_node(void)
 	return (cmd);
 }
 
-static size_t	token_len(const char *s)
+t_token *shell_split(const char *s)
 {
+	t_token *tokens = malloc(sizeof(t_token) * 512);
+	int		i = 0, j = 0;
 	char	quote;
-	size_t	i;
+	char	buffer[4096];
+	int		buf_i;
 
-	quote = 0;
-	i = 0;
 	while (s[i])
 	{
-		if (!quote && (s[i] == '"' || s[i] == '\''))
-		{
-			quote = s[i++];
-			while (s[i] && s[i] != quote)
-				i++;
-			if (s[i] == quote)
-				i++;
-		}
-		else if (!quote && (s[i] == ' ' || s[i] == '\t'))
-			break ;
-		else
+		while (s[i] == ' ' || s[i] == '\t')
 			i++;
+		if (!s[i])
+			break;
+
+		buf_i = 0;
+		tokens[j].quote = 0;
+
+		while (s[i] && !(s[i] == ' ' || s[i] == '\t'))
+		{
+			if (s[i] == '\'' || s[i] == '"')
+			{
+				quote = s[i++];
+				if (tokens[j].quote == 0)
+					tokens[j].quote = quote;
+				while (s[i] && s[i] != quote)
+					buffer[buf_i++] = s[i++];
+				if (s[i] == quote)
+					i++;
+			}
+			else
+			{
+				buffer[buf_i++] = s[i++];
+			}
+		}
+		buffer[buf_i] = '\0';
+		tokens[j].value = ft_strdup(buffer);
+		j++;
 	}
-	return (i);
-}
-
-static char	*extract_token(const char *s, char *quote_type)
-{
-	char	quote;
-	size_t	len;
-	size_t	j;
-	char	*buf;
-
-	quote = 0;
-	len = 0;
-	j = 0;
-	if (s[0] == '"' || s[0] == '\'')
-	{
-		quote = *s;
-		*quote_type = quote;
-		s++;
-		len = 0;
-		while (s[len] && s[len] != quote)
-			len++;
-		buf = malloc(len + 1);
-		if (!buf)
-			return (NULL);
-		for (j = 0; j < len; j++)
-			buf[j] = s[j];
-		buf[j] = '\0';
-		return (buf);
-	}
-	else
-	{
-		len = 0;
-		while (s[len] && s[len] != ' ' && s[len] != '\t' && s[len] != '"'
-			&& s[len] != '\'')
-			len++;
-		buf = malloc(len + 1);
-		if (!buf)
-			return (NULL);
-		for (j = 0; j < len; j++)
-			buf[j] = s[j];
-		buf[j] = '\0';
-		*quote_type = '\0';
-		return (buf);
-	}
-}
-
-t_token	*shell_split_with_quotes(const char *s)
-{
-	t_token	*tokens;
-	int		count;
-	char	quote;
-	char	*token;
-
-	tokens = malloc(sizeof(t_token) * 512);
-	if (!tokens)
-		return NULL;
-	count = 0;
-	while (*s)
-	{
-		while (*s == ' ' || *s == '\t')
-			s++;
-		if (*s == '\0')
-			break ;
-		token = extract_token(s, &quote);
-		if (!token)
-			break ;
-		tokens[count].value = token;
-		tokens[count].quote = quote;
-		count++;
-
-		size_t	len;
-
-		len = ft_strlen(token);
-		if (quote)
-			s += len + 2;
-		else
-			s += len;
-	}
-	tokens[count].value = NULL;
-	tokens[count].quote = 0;
-	return (tokens);
+	tokens[j].value = NULL;
+	tokens[j].quote = 0;
+	return tokens;
 }
 
 char	*strip_quotes(const char *str, char *quote_type)
@@ -421,29 +367,23 @@ t_cmd	*parse_commands(char *line, char **envp)
 	t_cmd	*head = NULL;
 	t_cmd	*curr = NULL;
 	t_cmd	*iter = NULL;
-	char	**tokens = ft_split(line, ' ');
+	t_token	*tokens = shell_split(line);
 	char	*tmp;
-	char	*cleaned;
 	char	*expanded;
-	char	quote_type;
 
-	for (int i = 0; tokens && tokens[i]; i++)
+	for (int i = 0; tokens && tokens[i].value; i++)
 	{
-		if (ft_strcmp(tokens[i], "|") == 0)
+		if (ft_strcmp(tokens[i].value, "|") == 0)
 		{
 			curr = NULL;
 			continue;
 		}
-		else if (ft_strcmp(tokens[i], "<") == 0 || ft_strcmp(tokens[i], ">") == 0
-			|| ft_strcmp(tokens[i], "<<") == 0 || ft_strcmp(tokens[i], ">>") == 0)
+		else if (ft_strcmp(tokens[i].value, "<") == 0 || ft_strcmp(tokens[i].value, ">") == 0
+			|| ft_strcmp(tokens[i].value, "<<") == 0 || ft_strcmp(tokens[i].value, ">>") == 0)
 		{
-			if (tokens[i + 1])
+			if (tokens[i + 1].value)
 			{
-				t_token op = {ft_strdup(tokens[i]), 0};
-				t_token file = {ft_strdup(tokens[i + 1]), 0};
-				parse_redirection_token(&op, &file, curr, envp);
-				free(op.value);
-				free(file.value);
+				parse_redirection_token(&tokens[i], &tokens[i + 1], curr, envp);
 				i++;
 			}
 			continue;
@@ -462,23 +402,10 @@ t_cmd	*parse_commands(char *line, char **envp)
 				iter->next = curr;
 			}
 		}
-
-		cleaned = strip_quotes(tokens[i], &quote_type);
-		// printf("%c\n", quote_type);
-
-		if (quote_type == '\'')
-		{
-			// printf("%c\n", quote_type);
-			expanded = ft_strdup(cleaned);
-			// printf("if :%s\n", expanded);
-		}
+		if (tokens[i].quote == '\'')
+			expanded = ft_strdup(tokens[i].value);
 		else
-		{
-			// printf("DBUG\n");
-			expanded = expand_variables(cleaned, envp);
-			// printf("else :%s\n", expanded);
-		}
-		free(cleaned);
+			expanded = expand_variables(tokens[i].value, envp);
 
 		if (!curr->cmd)
 			curr->cmd = ft_strdup(expanded);
@@ -491,9 +418,92 @@ t_cmd	*parse_commands(char *line, char **envp)
 		}
 		free(expanded);
 	}
-	ft_free_split(tokens);
+	free_tokens(tokens);
 	return head;
 }
+
+// t_cmd	*parse_commands(char *line, char **envp)
+// {
+// 	t_cmd	*head = NULL;
+// 	t_cmd	*curr = NULL;
+// 	t_cmd	*iter = NULL;
+// 	char	**tokens = ft_split(line, ' ');
+// 	char	*tmp;
+// 	char	*cleaned;
+// 	char	*expanded;
+// 	char	quote_type;
+
+// 	for (int i = 0; tokens && tokens[i]; i++)
+// 	{
+// 		if (ft_strcmp(tokens[i], "|") == 0)
+// 		{
+// 			curr = NULL;
+// 			continue;
+// 		}
+// 		else if (ft_strcmp(tokens[i], "<") == 0 || ft_strcmp(tokens[i], ">") == 0
+// 			|| ft_strcmp(tokens[i], "<<") == 0 || ft_strcmp(tokens[i], ">>") == 0)
+// 		{
+// 			if (tokens[i + 1])
+// 			{
+// 				t_token op = {ft_strdup(tokens[i]), 0};
+// 				t_token file = {ft_strdup(tokens[i + 1]), 0};
+// 				parse_redirection_token(&op, &file, curr, envp);
+// 				free(op.value);
+// 				free(file.value);
+// 				i++;
+// 			}
+// 			continue;
+// 		}
+
+// 		if (!curr)
+// 		{
+// 			curr = new_cmd_node();
+// 			if (!head)
+// 				head = curr;
+// 			else
+// 			{
+// 				iter = head;
+// 				while (iter->next)
+// 					iter = iter->next;
+// 				iter->next = curr;
+// 			}
+// 		}
+
+// 		cleaned = strip_quotes(tokens[i], &quote_type);
+// 		// printf("%c\n", quote_type);
+
+// 		if (quote_type == '\'')
+// 		{
+// 			// printf("%c\n", quote_type);
+// 			expanded = ft_strdup(cleaned);
+// 			// printf("if :%s\n", expanded);
+// 		}
+// 		else
+// 		{
+// 			// printf("DBUG\n");
+// 			expanded = expand_variables(cleaned, envp);
+// 			// printf("else :%s\n", expanded);
+// 		}
+// 		free(cleaned);
+
+// 		if (!curr->cmd)
+// 			curr->cmd = ft_strdup(expanded);
+// 		else
+// 		{
+// 			tmp = malloc(ft_strlen(curr->cmd) + ft_strlen(expanded) + 2);
+// 			sprintf(tmp, "%s %s", curr->cmd, expanded);
+// 			free(curr->cmd);
+// 			curr->cmd = tmp;
+// 		}
+// 		free(expanded);
+// 	}
+// 	ft_free_split(tokens);
+// 	return head;
+// }
+
+
+
+
 
 
 void	execute_pipeline(char *line, char ***envp)

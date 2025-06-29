@@ -35,7 +35,7 @@ int					execute_builtin(char **args, char ***envp);
 void				execute_cmd(char *cmdline, char **envp);
 
 // ビルトイン
-void				execute_echo(char **args, char **envp);
+void				execute_echo(char **args);
 void				execute_cd(char **args, char ***envp);
 void				execute_pwd(void);
 void				execute_export(char **args, char ***envp);
@@ -51,7 +51,7 @@ t_cmd				*parse_commands(char *line, char **envp);
 // char	*read_token(char **s);
 t_token				read_token(char **s);
 void				skip_whitespace(char **s);
-char				*strip_quotes(const char *str);
+char				*strip_quotes(const char *str, char *quote_type);
 char				*expand_variables(const char *str, char **envp);
 
 // ヘレドック、リダイレクト
@@ -81,7 +81,6 @@ char				*ft_strcat(char *dst, char *src);
 char				*ft_strndup(const char *s, size_t n);
 long long			ft_atoll(char *c);
 
-static t_cmd		*new_cmd_node(void);
 char				*find_path(char *cmd, char **envp);
 int					is_builtin(char *cmd);
 void				free_tokens(t_token *tokens);
@@ -89,5 +88,6 @@ t_token				*shell_split_with_quotes(const char *s);
 int					ft_strcmp(const char *s1, const char *s2);
 void				parse_redirection_token(t_token *op_token,
 						t_token *file_token, t_cmd *cmd, char **envp);
+t_token				*shell_split(const char *s);
 
 #endif
