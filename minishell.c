@@ -422,20 +422,70 @@ t_cmd	*parse_commands(char *line, char **envp)
 	return head;
 }
 
-void	execute_pipeline(char *line, char ***envp)
-{
-	t_cmd	*cmds;
-	int		pipefd[2];
-	int		prev_fd = -1;
-	int		pid, status;
+// void	execute_pipeline(char *line, char ***envp)
+// {
+// 	t_cmd	*cmds;
+// 	int		pipefd[2];
+// 	int		prev_fd = -1;
+// 	int		pid, status;
 
-	cmds = parse_commands(line, *envp);
+// 	cmds = parse_commands(line, *envp);
+
+// 	while (cmds)
+// 	{
+// 		pipe(pipefd);
+// 		pid = fork();
+// 		if (pid == 0)
+// 		{
+// 			if (cmds->infile != STDIN_FILENO)
+// 				dup2(cmds->infile, STDIN_FILENO);
+// 			else if (prev_fd != -1)
+// 				dup2(prev_fd, STDIN_FILENO);
+
+// 			if (cmds->outfile != STDOUT_FILENO)
+// 				dup2(cmds->outfile, STDOUT_FILENO);
+// 			else if (cmds->next)
+// 				dup2(pipefd[1], STDOUT_FILENO);
+
+// 			close(pipefd[0]);
+// 			execute_cmd(cmds->cmd, *envp);
+// 			exit(1);
+// 		}
+// 		else
+// 		{
+// 			waitpid(pid, &status, 0);
+// 			if (WIFEXITED(status))
+// 				g_last_status = WEXITSTATUS(status);
+// 			else
+// 				g_last_status = 1;
+
+// 			close(pipefd[1]);
+// 			if (prev_fd != -1)
+// 				close(prev_fd);
+// 			prev_fd = pipefd[0];
+// 			cmds = cmds->next;
+// 		}
+// 	}
+// }
+
+void execute_pipeline(char *line, char ***envp)
+{
+	t_cmd	*cmds = parse_commands(line, *envp);
+	int		prev_fd = -1;
+	int		pipefd[2];
+	pid_t	pids[256];
+	int		i = 0;
 
 	while (cmds)
 	{
-		pipe(pipefd);
-		pid = fork();
-		if (pid == 0)
+		if (cmds->next && pipe(pipefd) == -1)
+		{
+			perror("pipe");
+			exit(1);
+		}
+
+		pids[i] = fork();
+		if (pids[i] == 0)
 		{
 			if (cmds->infile != STDIN_FILENO)
 				dup2(cmds->infile, STDIN_FILENO);
@@ -447,26 +497,44 @@ void	execute_pipeline(char *line, char ***envp)
 			else if (cmds->next)
 				dup2(pipefd[1], STDOUT_FILENO);
 
-			close(pipefd[0]);
+			if (prev_fd != -1)
+				close(prev_fd);
+			if (cmds->next)
+			{
+				close(pipefd[0]);
+				close(pipefd[1]);
+			}
 			execute_cmd(cmds->cmd, *envp);
 			exit(1);
 		}
-		else
+		else if (pids[i] < 0)
 		{
-			waitpid(pid, &status, 0);
-			if (WIFEXITED(status))
-				g_last_status = WEXITSTATUS(status);
-			else
-				g_last_status = 1;
-
-			close(pipefd[1]);
-			if (prev_fd != -1)
-				close(prev_fd);
-			prev_fd = pipefd[0];
-			cmds = cmds->next;
+			perror("fork");
+			exit(1);
 		}
+
+		if (prev_fd != -1)
+			close(prev_fd);
+		if (cmds->next)
+		{
+			close(pipefd[1]);
+			prev_fd = pipefd[0];
+		}
+		cmds = cmds->next;
+		i++;
+	}
+	for (int j = 0; j < i; j++)
+	{
+		int status;
+		waitpid(pids[j], &status, 0);
+		if (WIFEXITED(status))
+			g_last_status = WEXITSTATUS(status);
 	}
 }
+
+
+
+
 
 int	main(int argc, char **argv, char **envp)
 {
