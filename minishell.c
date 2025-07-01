@@ -223,6 +223,8 @@ char	*expand_variables(const char *str, char **envp)
 			if (!str[i] || str[i] == ' ' || str[i] == '"' || str[i] == '\'' || str[i] == '\0')
 			{
 				result = realloc(result, j + 2);
+				if (!result)
+					return NULL;
 				result[j++] = '$';
 				result[j] = '\0';
 				continue;
@@ -264,29 +266,166 @@ char	*expand_variables(const char *str, char **envp)
 	return (result);
 }
 
-void	parse_redirection_token(t_token *op_token, t_token *file_token,
+
+
+
+void parse_redirection_token(t_token *op_token, t_token *file_token,
 		t_cmd *cmd, char **envp)
 {
-	char	*filename;
+	char *filename;
+	int fd = -1;
 
 	if (!file_token || !file_token->value)
-		return ;
-	if (file_token->quote != '\'')
-		filename = expand_variables(file_token->value, envp);
-	else
+	{
+		write(2, "syntax error near unexpected token\n", 36);
+		g_last_status = 2;
+		return;
+	}
+
+	// ファイル名の処理：クォートされている場合は展開しない
+	if (file_token->quote != 0)
 		filename = ft_strdup(file_token->value);
+	else
+		filename = expand_variables(file_token->value, envp);
+
 	if (!filename)
-		return ;
+	{
+		g_last_status = 1;
+		return;
+	}
+
+	// リダイレクション演算子に応じてファイルを開く
 	if (ft_strcmp(op_token->value, "<") == 0)
-		cmd->infile = open(filename, O_RDONLY);
+	{
+		fd = open(filename, O_RDONLY);
+		if (fd == -1)
+		{
+			perror(filename);
+			g_last_status = 1;
+			cmd->infile = -1;  // エラーを示すフラグ
+		}
+		else
+		{
+			if (cmd->infile != STDIN_FILENO && cmd->infile != -1)
+				close(cmd->infile);
+			cmd->infile = fd;
+		}
+	}
 	else if (ft_strcmp(op_token->value, ">") == 0)
-		cmd->outfile = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	{
+		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (fd == -1)
+		{
+			perror(filename);
+			g_last_status = 1;
+			cmd->outfile = -1;  // エラーを示すフラグ
+		}
+		else
+		{
+			if (cmd->outfile != STDOUT_FILENO && cmd->outfile != -1)
+				close(cmd->outfile);
+			cmd->outfile = fd;
+		}
+	}
 	else if (ft_strcmp(op_token->value, ">>") == 0)
-		cmd->outfile = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+	{
+		fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+		if (fd == -1)
+		{
+			perror(filename);
+			g_last_status = 1;
+			cmd->outfile = -1;  // エラーを示すフラグ
+		}
+		else
+		{
+			if (cmd->outfile != STDOUT_FILENO && cmd->outfile != -1)
+				close(cmd->outfile);
+			cmd->outfile = fd;
+		}
+	}
 	else if (ft_strcmp(op_token->value, "<<") == 0)
-		cmd->infile = setup_heredoc(filename);
+	{
+		fd = setup_heredoc(filename);
+		if (fd == -1)
+		{
+			g_last_status = 1;
+			cmd->infile = -1;  // エラーを示すフラグ
+		}
+		else
+		{
+			if (cmd->infile != STDIN_FILENO && cmd->infile != -1)
+				close(cmd->infile);
+			cmd->infile = fd;
+		}
+	}
+
 	free(filename);
 }
+
+// void parse_redirection_token(t_token *op_token, t_token *file_token,
+// 		t_cmd *cmd, char **envp)
+// {
+// 	char *filename;
+// 	int fd = -1;
+
+// 	if (!file_token || !file_token->value)
+// 		return ;
+
+// 	if (file_token->quote != 0)
+// 		filename = ft_strdup(file_token->value);
+// 	else
+// 		filename = expand_variables(file_token->value, envp);
+
+// 	if (!filename)
+// 		return ;
+
+// 	if (ft_strcmp(op_token->value, "<") == 0)
+// 		fd = open(filename, O_RDONLY);
+// 	else if (ft_strcmp(op_token->value, ">") == 0)
+// 		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+// 	else if (ft_strcmp(op_token->value, ">>") == 0)
+// 		fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+// 	else if (ft_strcmp(op_token->value, "<<") == 0)
+// 		fd = setup_heredoc(filename);
+
+// 	if (fd == -1)
+// 	{
+// 		perror(filename);
+// 		g_last_status = 1;
+// 	}
+// 	else
+// 	{
+// 		if (ft_strcmp(op_token->value, "<") == 0 || ft_strcmp(op_token->value, "<<") == 0)
+// 			cmd->infile = fd;
+// 		else
+// 			cmd->outfile = fd;
+// 	}
+// 	free(filename);
+// }
+
+// void	parse_redirection_token(t_token *op_token, t_token *file_token,
+// 		t_cmd *cmd, char **envp)
+// {
+// 	char	*filename;
+
+// 	if (!file_token || !file_token->value)
+// 		return ;
+// 	if (file_token->quote != '\'')
+// 		filename = expand_variables(file_token->value, envp);
+// 	else
+// 		filename = ft_strdup(file_token->value);
+// 	if (!filename)
+// 		return ;
+// 	if (ft_strcmp(op_token->value, "<") == 0)
+// 		cmd->infile = open(filename, O_RDONLY);
+// 	else if (ft_strcmp(op_token->value, ">") == 0)
+// 		cmd->outfile = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+// 	else if (ft_strcmp(op_token->value, ">>") == 0)
+// 		cmd->outfile = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+// 	else if (ft_strcmp(op_token->value, "<<") == 0)
+// 		cmd->infile = setup_heredoc(filename);
+// 	free(filename);
+// }
 
 static t_cmd	*new_cmd_node(void)
 {
@@ -301,6 +440,9 @@ static t_cmd	*new_cmd_node(void)
 	cmd->next = NULL;
 	return (cmd);
 }
+
+
+
 
 t_token *shell_split(const char *s)
 {
@@ -320,7 +462,38 @@ t_token *shell_split(const char *s)
 		buf_i = 0;
 		tokens[j].quote = 0;
 
-		while (s[i] && !(s[i] == ' ' || s[i] == '\t'))
+		if (s[i] == '<' || s[i] == '>')
+		{
+			if (s[i] == '<' && s[i + 1] == '<')
+			{
+				buffer[buf_i++] = s[i++];
+				buffer[buf_i++] = s[i++];
+			}
+			else if (s[i] == '>' && s[i + 1] == '>')
+			{
+				buffer[buf_i++] = s[i++];
+				buffer[buf_i++] = s[i++];
+			}
+			else
+			{
+				buffer[buf_i++] = s[i++];
+			}
+			buffer[buf_i] = '\0';
+			tokens[j].value = ft_strdup(buffer);
+			j++;
+			continue;
+		}
+
+		if (s[i] == '|')
+		{
+			buffer[buf_i++] = s[i++];
+			buffer[buf_i] = '\0';
+			tokens[j].value = ft_strdup(buffer);
+			j++;
+			continue;
+		}
+
+		while (s[i] && !(s[i] == ' ' || s[i] == '\t' || s[i] == '<' || s[i] == '>' || s[i] == '|'))
 		{
 			if (s[i] == '\'' || s[i] == '"')
 			{
@@ -346,6 +519,50 @@ t_token *shell_split(const char *s)
 	return tokens;
 }
 
+// t_token *shell_split(const char *s)
+// {
+// 	t_token *tokens = malloc(sizeof(t_token) * 512);
+// 	int		i = 0, j = 0;
+// 	char	quote;
+// 	char	buffer[4096];
+// 	int		buf_i;
+
+// 	while (s[i])
+// 	{
+// 		while (s[i] == ' ' || s[i] == '\t')
+// 			i++;
+// 		if (!s[i])
+// 			break;
+
+// 		buf_i = 0;
+// 		tokens[j].quote = 0;
+
+// 		while (s[i] && !(s[i] == ' ' || s[i] == '\t'))
+// 		{
+// 			if (s[i] == '\'' || s[i] == '"')
+// 			{
+// 				quote = s[i++];
+// 				if (tokens[j].quote == 0)
+// 					tokens[j].quote = quote;
+// 				while (s[i] && s[i] != quote)
+// 					buffer[buf_i++] = s[i++];
+// 				if (s[i] == quote)
+// 					i++;
+// 			}
+// 			else
+// 			{
+// 				buffer[buf_i++] = s[i++];
+// 			}
+// 		}
+// 		buffer[buf_i] = '\0';
+// 		tokens[j].value = ft_strdup(buffer);
+// 		j++;
+// 	}
+// 	tokens[j].value = NULL;
+// 	tokens[j].quote = 0;
+// 	return tokens;
+// }
+
 char	*strip_quotes(const char *str, char *quote_type)
 {
 	size_t	len = ft_strlen(str);
@@ -361,6 +578,10 @@ char	*strip_quotes(const char *str, char *quote_type)
 		return ft_strdup(str);
 	}
 }
+
+
+
+
 
 t_cmd	*parse_commands(char *line, char **envp)
 {
@@ -422,59 +643,106 @@ t_cmd	*parse_commands(char *line, char **envp)
 	return head;
 }
 
-// void	execute_pipeline(char *line, char ***envp)
+// t_cmd	*parse_commands(char *line, char **envp)
 // {
-// 	t_cmd	*cmds;
-// 	int		pipefd[2];
-// 	int		prev_fd = -1;
-// 	int		pid, status;
+// 	t_cmd	*head = NULL;
+// 	t_cmd	*curr = NULL;
+// 	t_cmd	*iter = NULL;
+// 	t_token	*tokens = shell_split(line);
+// 	char	*tmp;
+// 	char	*expanded;
 
-// 	cmds = parse_commands(line, *envp);
-
-// 	while (cmds)
+// 	for (int i = 0; tokens && tokens[i].value; i++)
 // 	{
-// 		pipe(pipefd);
-// 		pid = fork();
-// 		if (pid == 0)
+// 		if (ft_strcmp(tokens[i].value, "|") == 0)
 // 		{
-// 			if (cmds->infile != STDIN_FILENO)
-// 				dup2(cmds->infile, STDIN_FILENO);
-// 			else if (prev_fd != -1)
-// 				dup2(prev_fd, STDIN_FILENO);
-
-// 			if (cmds->outfile != STDOUT_FILENO)
-// 				dup2(cmds->outfile, STDOUT_FILENO);
-// 			else if (cmds->next)
-// 				dup2(pipefd[1], STDOUT_FILENO);
-
-// 			close(pipefd[0]);
-// 			execute_cmd(cmds->cmd, *envp);
-// 			exit(1);
+// 			curr = NULL;
+// 			continue;
 // 		}
+// 		else if (ft_strcmp(tokens[i].value, "<") == 0 || ft_strcmp(tokens[i].value, ">") == 0
+// 			|| ft_strcmp(tokens[i].value, "<<") == 0 || ft_strcmp(tokens[i].value, ">>") == 0)
+// 		{
+// 			if (tokens[i + 1].value)
+// 			{
+// 				parse_redirection_token(&tokens[i], &tokens[i + 1], curr, envp);
+// 				i++;
+// 			}
+// 			continue;
+// 		}
+
+// 		if (!curr)
+// 		{
+// 			curr = new_cmd_node();
+// 			if (!head)
+// 				head = curr;
+// 			else
+// 			{
+// 				iter = head;
+// 				while (iter->next)
+// 					iter = iter->next;
+// 				iter->next = curr;
+// 			}
+// 		}
+// 		if (tokens[i].quote == '\'')
+// 			expanded = ft_strdup(tokens[i].value);
+// 		else
+// 			expanded = expand_variables(tokens[i].value, envp);
+
+// 		if (!curr->cmd)
+// 			curr->cmd = ft_strdup(expanded);
 // 		else
 // 		{
-// 			waitpid(pid, &status, 0);
-// 			if (WIFEXITED(status))
-// 				g_last_status = WEXITSTATUS(status);
-// 			else
-// 				g_last_status = 1;
-
-// 			close(pipefd[1]);
-// 			if (prev_fd != -1)
-// 				close(prev_fd);
-// 			prev_fd = pipefd[0];
-// 			cmds = cmds->next;
+// 			tmp = malloc(ft_strlen(curr->cmd) + ft_strlen(expanded) + 2);
+// 			sprintf(tmp, "%s %s", curr->cmd, expanded);
+// 			free(curr->cmd);
+// 			curr->cmd = tmp;
 // 		}
+// 		free(expanded);
 // 	}
+// 	free_tokens(tokens);
+// 	return head;
 // }
+
+
+
 
 void execute_pipeline(char *line, char ***envp)
 {
 	t_cmd	*cmds = parse_commands(line, *envp);
+	t_cmd	*current = cmds;
 	int		prev_fd = -1;
 	int		pipefd[2];
 	pid_t	pids[256];
 	int		i = 0;
+	int		has_error = 0;
+
+	current = cmds;
+	while (current)
+	{
+		if (current->infile == -1 || current->outfile == -1)
+		{
+			has_error = 1;
+			break;
+		}
+		current = current->next;
+	}
+
+	if (has_error)
+	{
+		while (cmds)
+		{
+			t_cmd *temp = cmds;
+			cmds = cmds->next;
+			if (temp->cmd)
+				free(temp->cmd);
+			if (temp->infile != STDIN_FILENO && temp->infile != -1)
+				close(temp->infile);
+			if (temp->outfile != STDOUT_FILENO && temp->outfile != -1)
+				close(temp->outfile);
+			free(temp);
+		}
+		return;
+	}
 
 	while (cmds)
 	{
@@ -523,6 +791,7 @@ void execute_pipeline(char *line, char ***envp)
 		cmds = cmds->next;
 		i++;
 	}
+
 	for (int j = 0; j < i; j++)
 	{
 		int status;
@@ -531,6 +800,69 @@ void execute_pipeline(char *line, char ***envp)
 			g_last_status = WEXITSTATUS(status);
 	}
 }
+// void execute_pipeline(char *line, char ***envp)
+// {
+// 	t_cmd	*cmds = parse_commands(line, *envp);
+// 	int		prev_fd = -1;
+// 	int		pipefd[2];
+// 	pid_t	pids[256];
+// 	int		i = 0;
+
+// 	while (cmds)
+// 	{
+// 		if (cmds->next && pipe(pipefd) == -1)
+// 		{
+// 			perror("pipe");
+// 			exit(1);
+// 		}
+
+// 		pids[i] = fork();
+// 		if (pids[i] == 0)
+// 		{
+// 			if (cmds->infile != STDIN_FILENO)
+// 				dup2(cmds->infile, STDIN_FILENO);
+// 			else if (prev_fd != -1)
+// 				dup2(prev_fd, STDIN_FILENO);
+
+// 			if (cmds->outfile != STDOUT_FILENO)
+// 				dup2(cmds->outfile, STDOUT_FILENO);
+// 			else if (cmds->next)
+// 				dup2(pipefd[1], STDOUT_FILENO);
+
+// 			if (prev_fd != -1)
+// 				close(prev_fd);
+// 			if (cmds->next)
+// 			{
+// 				close(pipefd[0]);
+// 				close(pipefd[1]);
+// 			}
+// 			execute_cmd(cmds->cmd, *envp);
+// 			exit(1);
+// 		}
+// 		else if (pids[i] < 0)
+// 		{
+// 			perror("fork");
+// 			exit(1);
+// 		}
+
+// 		if (prev_fd != -1)
+// 			close(prev_fd);
+// 		if (cmds->next)
+// 		{
+// 			close(pipefd[1]);
+// 			prev_fd = pipefd[0];
+// 		}
+// 		cmds = cmds->next;
+// 		i++;
+// 	}
+// 	for (int j = 0; j < i; j++)
+// 	{
+// 		int status;
+// 		waitpid(pids[j], &status, 0);
+// 		if (WIFEXITED(status))
+// 			g_last_status = WEXITSTATUS(status);
+// 	}
+// }
 
 
 

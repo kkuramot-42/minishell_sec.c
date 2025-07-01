@@ -1,0 +1,12 @@
+!!　　//直前のコマンドの実行
+例: > echo hello
+    hello
+    > !!
+    echo hello
+    hello
+    > ec
+    command not faund: ec
+    > !!ho hello
+    echo hello
+    hello
+

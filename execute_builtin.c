@@ -91,6 +91,14 @@ void execute_cd(char **args, char ***envp)
 	char cwd[1024];
 	char *target;
 
+	if (args[2])
+	{
+		printf("too many arguments");   //要確認
+		// write(2, "too many arguments\n", 20);
+		exit(1);
+		return;
+	}
+
 	if (!getcwd(cwd, sizeof(cwd)))
 	{
 		perror("getcwd");
@@ -114,6 +122,7 @@ void execute_cd(char **args, char ***envp)
 	if (!target || chdir(target) != 0)
 	{
 		perror("cd");
+		exit(1);
 		return;
 	}
 
@@ -199,6 +208,14 @@ void execute_env(char **envp)
 
 void execute_exit(char **args)
 {
+	if (args[2])
+	{
+		printf("too many arguments");   //要確認
+		// write(2, "too many arguments\n", 20);
+		exit(1);
+		return;
+	}
+
 	if (args[1])
 	{
 		// for (int i = 0; args[1][i]; i++)
@@ -210,12 +227,12 @@ void execute_exit(char **args)
 		// 	}
 		// }
 		long long status = ft_atoll(args[1]) % 256;
-		if (args[2])
-		{
-			perror("exit: too many arguments");
-			g_last_status = 1;
-			return;
-		}
+		// if (args[2])
+		// {
+		// 	perror("exit: too many arguments");
+		// 	g_last_status = 1;
+		// 	return;
+		// }
 		exit(status);		//複数exit時にexitせずにexit_statusのみ最後のものに更新
 		// g_last_status = status;
 	}
