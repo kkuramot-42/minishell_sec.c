@@ -10,7 +10,7 @@ void handler(int signum) {
 
 int main() {
     struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
+    // memset(&sa, 0, sizeof(sa));
 
     sa.sa_handler = handler;
 

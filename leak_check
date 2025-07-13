@@ -1,0 +1,21 @@
+echo hello world   or   echo 'hello world'   or   echo "hello world"    を二回以上
+
+==186136== HEAP SUMMARY:
+==186136==     in use at exit: 212,182 bytes in 317 blocks
+==186136==   total heap usage: 651 allocs, 334 frees, 274,805 bytes allocated
+==186136== 
+==186136== 51 (32 direct, 19 indirect) bytes in 1 blocks are definitely lost in loss record 27 of 81
+==186136==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==186136==    by 0x405001: new_cmd_node (minishell.c:658)
+==186136==    by 0x404CA2: parse_commands (minishell.c:839)
+==186136==    by 0x4050EF: execute_pipeline (minishell.c:1013)
+==186136==    by 0x4057D3: main (minishell.c:1262)
+==186136== 
+==186136== LEAK SUMMARY:
+==186136==    definitely lost: 32 bytes in 1 blocks
+==186136==    indirectly lost: 19 bytes in 1 blocks
+==186136==      possibly lost: 0 bytes in 0 blocks
+==186136==    still reachable: 212,131 bytes in 315 blocks
+
+--------------------------------------------------------------------------------------------------------------------------------
+

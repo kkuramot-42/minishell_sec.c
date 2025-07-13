@@ -19,9 +19,9 @@ char *create_env_entry(const char *key, const char *value)
 	if (!entry)
 		return NULL;
 
-	memcpy(entry, key, key_len);
+	ft_memcpy(entry, key, key_len);
 	entry[key_len] = '=';
-	memcpy(entry + key_len + 1, value, val_len);
+	ft_memcpy(entry + key_len + 1, value, val_len);
 	entry[key_len + 1 + val_len] = '\0';
 
 	return entry;
@@ -37,6 +37,7 @@ char **overwrite_env(const char *key, const char *value, char **envp)
 	{
 		if (ft_strncmp(envp[i], key, key_len) == 0 && envp[i][key_len] == '=')
 		{
+			free(envp[i]);
 			envp[i] = new_entry;
 			return envp;
 		}
@@ -57,6 +58,8 @@ char **overwrite_env(const char *key, const char *value, char **envp)
 
 	new_envp[count] = new_entry;
 	new_envp[count + 1] = NULL;
+
+	free(envp);
 
 	return new_envp;
 }
@@ -93,10 +96,9 @@ void execute_cd(char **args, char ***envp)
 
 	if (args[2])
 	{
-		printf("too many arguments");   //要確認
-		// write(2, "too many arguments\n", 20);
+		fprintf(stderr, "cd: too many arguments\n");   //要確認
+		// write(2, "cd: too many arguments\n", 20);
 		exit(1);
-		return;
 	}
 
 	if (!getcwd(cwd, sizeof(cwd)))
@@ -142,6 +144,20 @@ void execute_pwd(void)
 		perror("pwd");
 }
 
+int is_valid_identifier(const char *str)
+{
+	if (!str || !str[0])
+		return 0;
+	if (!isalpha(str[0]) && str[0] != '_')
+		return 0;
+	for (int i = 1; str[i] && str[i] != '='; i++)
+	{
+		if (!isalnum(str[i]) && str[i] != '_')
+			return 0;
+	}
+	return 1;
+}
+
 void execute_export(char **args, char ***envp)
 {
 	if (!args[1])
@@ -162,39 +178,60 @@ void execute_export(char **args, char ***envp)
 		}
 		return;
 	}
+
 	for (int i = 1; args[i]; i++)
 	{
 		char *eq = ft_strchr(args[i], '=');
 		if (eq)
 		{
 			*eq = '\0';
+			if (!is_valid_identifier(args[i]))
+			{
+				fprintf(stderr, "export: `%s': not a valid identifier\n", args[i]);
+				*eq = '=';
+				exit (1);
+			}
 			*envp = overwrite_env(args[i], eq + 1, *envp);
 			*eq = '=';
 		}
 		else
 		{
+			if (!is_valid_identifier(args[i]))
+			{
+				fprintf(stderr, "export: `%s': not a valid identifier\n", args[i]);
+				exit (1);
+			}
 			*envp = overwrite_env(args[i], "", *envp);
 		}
 	}
 }
 
+
+
+
+
+
 void execute_unset(char **args, char ***envp)
 {
-	if (args[1])
-	{
-		int i = 0;
-		while ((*envp)[i])
-		{
-			if (ft_strncmp((*envp)[i], args[1], ft_strlen(args[1])) == 0 && (*envp)[i][ft_strlen(args[1])] == '=')
-			{
-				free((*envp)[i]);
-				for (int j = i; (*envp)[j]; j++)
-					(*envp)[j] = (*envp)[j + 1];
-				break;
-			}
-			i++;
-		}
-	}
+	if (!args[1])
+        return;
+    for (int arg_idx = 1; args[arg_idx]; arg_idx++)
+    {
+        int i = 0;
+        while ((*envp)[i])
+        {
+            size_t key_len = ft_strlen(args[arg_idx]);
+            if (ft_strncmp((*envp)[i], args[arg_idx], key_len) == 0 && 
+                (*envp)[i][key_len] == '=')
+            {
+                free((*envp)[i]);
+                for (int j = i; (*envp)[j]; j++)
+                    (*envp)[j] = (*envp)[j + 1];
+                break;
+            }
+            i++;
+        }
+    }
 }
 
 void execute_env(char **envp)
@@ -206,38 +243,51 @@ void execute_env(char **envp)
 	}
 }
 
+
+int non_number(char *c)
+{
+	int i;
+	i = 0;
+	while(c[i])
+	{
+		if(!((c[i] >= '0' && c[i] <= '9') || c[i] == '-' || c[i] == '+'))
+			return 1;
+		i++;
+	}
+	return 0;
+}
+
 void execute_exit(char **args)
 {
-	if (args[2])
+	int arg_count = 0;
+	while (args[arg_count])
+		arg_count++;
+	
+	if(!args[1])
+		exit(0);
+	
+	if (non_number(args[1]))
 	{
-		printf("too many arguments");   //要確認
-		// write(2, "too many arguments\n", 20);
-		exit(1);
-		return;
+		write(1, "exit\n", 5);
+		fprintf(stderr, "exit: %s: numeric argument required\n", args[1]);
+		exit (2);
 	}
 
-	if (args[1])
+	if (arg_count > 2)
 	{
-		// for (int i = 0; args[1][i]; i++)
-		// {
-		// 	if (!('0' <= args[1][i] && args[1][i] <= '9'))
-		// 	{
-		// 		fprintf(stderr, "minishell: exit: %s: numeric argument required\n", args[1]);
-		// 		exit(255);
-		// 	}
-		// }
+		fprintf(stderr, "exit: too many arguments\n");
+		exit(1);
+	}
+
+	if (arg_count == 2)
+	{
 		long long status = ft_atoll(args[1]) % 256;
-		// if (args[2])
-		// {
-		// 	perror("exit: too many arguments");
-		// 	g_last_status = 1;
-		// 	return;
-		// }
-		exit(status);		//複数exit時にexitせずにexit_statusのみ最後のものに更新
-		// g_last_status = status;
+		exit(status);
 	}
 	exit(0);
 }
+
+
 
 int execute_builtin(char **args, char ***envp)
 {
